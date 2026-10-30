@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SvgForge — Editor</title>
+<style>
+:root{
+  --ink:#141519; --panel:#1c1e24; --panel2:#22242c; --line:#2a2d35;
+  --text:#e9e7e2; --muted:#8e9099; --amber:#f2a33c; --amber-dim:#7a5a2a;
+  --green:#43c784; --red:#e5484d; --sel:#f2a33c;
+  --disp:"Space Grotesk",system-ui,sans-serif;
+  --ui:"Inter",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--ink);color:var(--text);font:14px/1.45 var(--ui);overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+
+/* ---------- top bar ---------- */
+#topbar{display:flex;align-items:center;gap:16px;height:56px;
+  padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+#brand{font:700 17px var(--disp);letter-spacing:.02em;white-space:nowrap}
+#brand em{color:var(--amber);font-style:normal}
+#filename{font:12px var(--mono);color:var(--muted);max-width:220px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* signature: size tabs are true aspect-ratio miniatures */
+#sizetabs{display:flex;gap:10px;align-items:flex-end;margin:0 auto}
+.sizetab{display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:6px 8px 5px;border-radius:8px;border:1px solid transparent}
+.sizetab:hover{background:var(--panel2)}
+.sizetab .mini{--mw:30px;--mh:30px;width:var(--mw);height:var(--mh);
+  border:1.5px solid var(--muted);border-radius:3px;position:relative;
+  transition:border-color .15s}
+.sizetab .lbl{font:500 10px var(--mono);color:var(--muted)}
+.sizetab.active{border-color:var(--line);background:var(--panel2)}
+.sizetab.active .mini{border-color:var(--amber);
+  box-shadow:0 0 0 1px rgba(242,163,60,.35)}
+.sizetab.active .lbl{color:var(--text)}
+.sizetab .ovbadge{position:absolute;top:-6px;right:-7px;min-width:13px;
+  height:13px;border-radius:7px;background:var(--amber);color:#141519;
+  font:600 9px/13px var(--mono);text-align:center;padding:0 3px;display:none}
+.sizetab.hasov .ovbadge{display:block}
+
+#actions{display:flex;gap:8px;align-items:center}
+.btn{padding:7px 13px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel2);font-weight:500;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--amber);color:#141519;border-color:var(--amber);font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.toggled{border-color:var(--green);color:var(--green)}
+.btn:disabled{opacity:.45;cursor:default}
+
+/* ---------- main 3-pane ---------- */
+#main{display:grid;grid-template-columns:250px 1fr 252px;
+  height:calc(100% - 56px)}
+.pane{background:var(--panel);border-right:1px solid var(--line);
+  overflow-y:auto;padding:12px}
+.pane:last-child{border-right:none;border-left:1px solid var(--line)}
+.pane h2{font:600 10px var(--ui);letter-spacing:.09em;color:var(--muted);
+  text-transform:uppercase;margin:4px 2px 10px}
+
+/* layer list */
+.layer{display:flex;align-items:center;gap:8px;padding:6px 7px;
+  border-radius:8px;cursor:pointer;border:1px solid transparent}
+.layer:hover{background:var(--panel2)}
+.layer.sel{background:var(--panel2);border-color:var(--amber-dim)}
+.layer img{width:30px;height:30px;object-fit:contain;border-radius:4px;
+  background:
+   repeating-conic-gradient(#2c2e36 0 25%,#24262d 0 50%) 0 0/10px 10px;
+  flex:none}
+.layer .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;font-size:12.5px}
+.layer .role{font:500 9px var(--mono);color:var(--muted);
+  border:1px solid var(--line);border-radius:4px;padding:1px 4px;flex:none}
+.layer .ovdot{width:6px;height:6px;border-radius:3px;background:var(--amber);
+  flex:none;visibility:hidden}
+.layer.hasov .ovdot{visibility:visible}
+.layer.dropped{opacity:.4}
+.layer .lock{color:var(--muted);font-size:11px;flex:none}
+
+/* stage */
+#stagewrap{position:relative;overflow:hidden;background:var(--ink);
+  display:flex;align-items:center;justify-content:center}
+#stage{position:absolute;transform-origin:0 0}
+#artboard{position:relative;
+  background:
+   repeating-conic-gradient(#3a3d46 0 25%,#31343c 0 50%) 0 0/24px 24px;
+  box-shadow:0 0 0 1px var(--line),0 18px 60px rgba(0,0,0,.5)}
+.el{position:absolute;touch-action:none}
+.el img{width:100%;height:100%;display:block;pointer-events:none;
+  image-rendering:auto}
+.el.locked{cursor:not-allowed}
+.el:not(.locked){cursor:grab}
+.el.dragging{cursor:grabbing}
+.el.sel{outline:1.5px solid var(--sel);outline-offset:0}
+.handle{position:absolute;width:11px;height:11px;background:var(--sel);
+  border:2px solid #141519;border-radius:3px;z-index:5}
+.handle.nw{top:-6px;left:-6px;cursor:nwse-resize}
+.handle.ne{top:-6px;right:-6px;cursor:nesw-resize}
+.handle.sw{bottom:-6px;left:-6px;cursor:nesw-resize}
+.handle.se{bottom:-6px;right:-6px;cursor:nwse-resize}
+.guide{position:absolute;background:var(--amber);opacity:.85;z-index:900;
+  pointer-events:none}
+.guide.v{width:1px;top:0;bottom:0}
+.guide.h{height:1px;left:0;right:0}
+#engineimg{position:absolute;inset:0;width:100%;height:100%;display:none;
+  z-index:800;pointer-events:none}
+#artboard.engine #engineimg{display:block}
+#artboard.engine .el{pointer-events:none;opacity:0}
+#enginetag{position:absolute;top:10px;left:10px;z-index:950;display:none;
+  font:500 10px var(--mono);color:#141519;background:var(--green);
+  border-radius:5px;padding:2px 7px}
+#stagewrap.engine #enginetag{display:block}
+#stagehint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  font:11px var(--mono);color:var(--muted);pointer-events:none}
+
+/* inspector */
+.insrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.field label{display:block;font:500 9px var(--mono);color:var(--muted);
+  margin:0 0 3px 2px;text-transform:uppercase}
+.field input{width:100%;background:var(--ink);border:1px solid var(--line);
+  border-radius:7px;padding:6px 8px;font:12px var(--mono)}
+.field input:focus{border-color:var(--amber);outline:none}
+.kv{display:flex;justify-content:space-between;font-size:12px;
+  padding:3px 2px;color:var(--muted)}
+.kv b{color:var(--text);font-weight:500;font-family:var(--mono);font-size:11.5px}
+#inspector .btn{width:100%;margin-top:8px}
+.note{font-size:11px;color:var(--muted);margin-top:12px;line-height:1.5}
+
+/* landing / loading */
+#landing{position:fixed;inset:0;background:var(--ink);z-index:2000;
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px}
+#landing h1{font:700 30px var(--disp)}
+#landing h1 em{color:var(--amber);font-style:normal}
+#landing p{color:var(--muted);max-width:420px;text-align:center}
+#smartopt{color:var(--muted);font-size:13px;display:flex;gap:8px;
+  align-items:center;cursor:pointer;user-select:none}
+#smartopt .sub{opacity:.65}
+.modebadge{background:#7a4a12;color:#ffd9a0;border-radius:4px;
+  padding:2px 7px;font:600 10px var(--mono,monospace);
+  vertical-align:2px;letter-spacing:.4px}
+.bglayer{position:absolute;inset:0;pointer-events:none}
+.bglayer img{width:100%;height:100%;display:block}
+#drop{border:1.5px dashed var(--line);border-radius:14px;padding:44px 64px;
+  text-align:center;cursor:pointer;transition:border-color .15s}
+#drop:hover,#drop.over{border-color:var(--amber)}
+#drop .big{font:500 15px var(--ui);margin-bottom:6px}
+#drop .sub{font:11px var(--mono);color:var(--muted)}
+#loading{display:none;align-items:center;gap:12px;color:var(--muted);
+  font:12px var(--mono)}
+#loading .spin{width:16px;height:16px;border:2px solid var(--line);
+  border-top-color:var(--amber);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#boards{display:none;flex-wrap:wrap;gap:8px;max-width:520px;justify-content:center}
+#boards button{border:1px solid var(--line);border-radius:8px;
+  padding:8px 14px;font:12px var(--mono)}
+#boards button:hover{border-color:var(--amber)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+  padding:9px 16px;font-size:13px;z-index:3000;display:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div id="landing">
+  <h1>Svg<em>Forge</em></h1>
+  <p>Upload an SVG to extract its layers and resize it while preserving proportions. Download SVGs, PNGs and individual layers.</p>
+  <div id="drop" role="button" tabindex="0">
+    <div class="big">Drop a file, or click to choose</div>
+    <div class="sub">.svg</div>
+  </div>
+  <input type="file" id="fileinput" accept=".svg" hidden>
+  <div id="boards"></div>
+  <div id="loading"><div class="spin"></div><span id="loadmsg">Analyzing layers…</span></div>
+</div>
+
+<div id="topbar">
+  <div id="brand">Svg<em>Forge</em></div>
+  <div id="filename"></div>
+  <div id="sizetabs"></div>
+  <div id="actions">
+    <button class="btn" id="btn-engine" title="Show the engine's true render for this size">Engine preview</button>
+    <button class="btn" id="btn-new">New file</button>
+    <button class="btn primary" id="btn-export">Export all sizes</button>
+  </div>
+</div>
+
+<div id="main">
+  <div class="pane" id="layerpane"><h2>Layers</h2><div id="layerlist"></div></div>
+  <div id="stagewrap">
+    <div id="stage"><div id="artboard">
+      <img id="engineimg" alt="Engine render">
+    </div></div>
+    <div id="enginetag">ENGINE RENDER</div>
+    <div id="stagehint">drag to move · corners to scale · shift = free scale · arrows nudge</div>
+  </div>
+  <div class="pane" id="inspector">
+    <h2>Inspector</h2>
+    <div id="ins-empty" class="note">Select a layer on the canvas or in the list.</div>
+    <div id="ins-body" style="display:none">
+      <div class="kv"><span>Layer</span><b id="ins-name"></b></div>
+      <div class="kv"><span>Role</span><b id="ins-role"></b></div>
+      <div class="kv"><span>Group</span><b id="ins-group"></b></div>
+      <div class="insrow">
+        <div class="field"><label>x</label><input id="in-x" type="number" step="1"></div>
+        <div class="field"><label>y</label><input id="in-y" type="number" step="1"></div>
+      </div>
+      <div class="insrow">
+        <div class="field"><label>w</label><input id="in-w" type="number" step="1"></div>
+        <div class="field"><label>h</label><input id="in-h" type="number" step="1"></div>
+      </div>
+      <button class="btn" id="btn-resetlayer">Reset layer to engine</button>
+      <a class="btn" id="download-layer" style="display:none">Download SVG layer</a>
+    </div>
+    <div style="border-top:1px solid var(--line);margin:16px 0 12px"></div>
+    <div class="kv"><span>Overrides on this size</span><b id="ins-ovcount">0</b></div>
+    <button class="btn" id="btn-resetsize">Reset this size</button>
+    <p class="note">Overrides apply to the selected size. Amber dots mark adjusted layers.</p>
+    <div id="svg-controls" hidden>
+      <h2>Resize SVG</h2>
+      <p class="note">Layered photo ads fill the frame using their background and product layers. Text and products keep their proportions. Export includes SVGs, PNGs and extracted layers.</p>
+      <div class="insrow">
+        <div class="field"><label for="custom-w">Width</label><input id="custom-w" type="number" min="1" max="8192" value="1600"></div>
+        <div class="field"><label for="custom-h">Height</label><input id="custom-h" type="number" min="1" max="8192" value="900"></div>
+      </div>
+      <button class="btn" id="btn-size">Add size</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const state={sid:null,file:"",layers:[],outputs:{},sizes:[],
+  size:null,overrides:{},sel:null,engine:false,engineStale:{},scale:1};
+const roleById=i=>{const l=state.layers.find(x=>x.index===i);return l?l.role:null};
+const layerById=i=>state.layers.find(x=>x.index===i);
+
+function toast(msg,ms=2600){const t=$("#toast");t.textContent=msg;
+  t.style.display="block";clearTimeout(t._h);
+  t._h=setTimeout(()=>t.style.display="none",ms)}
+
+/* ---------------- upload / plan ---------------- */
+const drop=$("#drop"),fi=$("#fileinput");
+drop.addEventListener("click",()=>fi.click());
+drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")fi.click()});
+["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{
+  e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{
+  e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)upload(f)});
+fi.addEventListener("change",()=>{if(fi.files[0])upload(fi.files[0])});
+
+let tick=null;
+function loading(on,msg){$("#loading").style.display=on?"flex":"none";
+  $("#drop").style.display=on?"none":"block";$("#boards").style.display="none";
+  clearInterval(tick);
+  if(on){const t0=Date.now();$("#loadmsg").textContent=msg;
+    tick=setInterval(()=>{$("#loadmsg").textContent=
+      msg+" "+Math.round((Date.now()-t0)/1000)+"s (big files can take 30–90s)"},1000)}}
+
+async function upload(file){
+  loading(true,"Analyzing layers…");
+  const fd=new FormData();fd.append("file",file);
+  try{
+    const r=await fetch("/editor/plan",{method:"POST",body:fd});
+    if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
+    const man=await r.json();
+    boot(man);
+  }catch(e){loading(false);toast("Upload failed: "+e.message,5000)}
+}
+function boot(man){
+  clearInterval(tick);
+  state.sid=man.sid;state.file=man.file;state.layers=man.layers;
+  state.isSvg=man.source?.mode==="svg";
+  $("#svg-controls").hidden=!state.isSvg;
+  $("#stagehint").textContent=state.isSvg?"drag to move · corners scale proportionally · arrows nudge":"drag to move · corners to scale · shift = free scale · arrows nudge";
+  state.fileHash=man.file_hash;state.fileName=man.file;state.kind=man.kind;
+  state.bgUrls=man.bg_urls||{};state.bgColor=man.bg_color;
+  state.forceSmart=!!man.force_smart;
+  $("#filename").innerHTML=esc(man.file)+(state.forceSmart?
+    ' <span class="modebadge">SMART-CONVERT ON</span>':'');
+  state.outputs=man.outputs;state.sizes=man.sizes;
+  state.overrides={};state.engineStale={};state.sel=null;state.engine=false;
+  state.sizes.forEach(s=>{state.overrides[s]={};state.engineStale[s]=true});
+  state.size=state.sizes[0];
+  $("#landing").style.display="none";
+  buildTabs();buildLayerList();renderStage();updateInspector();
+}
+
+$("#btn-new").addEventListener("click",()=>{
+  $("#landing").style.display="flex";loading(false);fi.value=""});
+
+/* ---------------- size tabs (aspect miniatures) ---------------- */
+function buildTabs(){
+  const wrap=$("#sizetabs");wrap.innerHTML="";
+  state.sizes.forEach(key=>{
+    const[w,h]=key.split("x").map(Number);
+    const b=document.createElement("button");b.className="sizetab";
+    b.dataset.size=key;
+    const k=30/Math.max(w,h);
+    b.innerHTML=`<span class="mini" style="--mw:${Math.round(w*k)}px;--mh:${Math.round(h*k)}px">
+      <span class="ovbadge"></span></span><span class="lbl">${key}</span>`;
+    b.onclick=()=>{state.size=key;state.sel=null;renderStage();
+      updateInspector();syncTabs();if(state.engine)refreshEngine()};
+    wrap.appendChild(b)});
+  syncTabs();
+}
+function syncTabs(){
+  document.querySelectorAll(".sizetab").forEach(t=>{
+    const key=t.dataset.size,n=Object.keys(state.overrides[key]||{}).length;
+    t.classList.toggle("active",key===state.size);
+    t.classList.toggle("hasov",n>0);
+    t.querySelector(".ovbadge").textContent=n});
+}
+
+/* ---------------- layer list ---------------- */
+function buildLayerList(){
+  const list=$("#layerlist");list.innerHTML="";
+  const placedIdx=new Set((state.outputs[state.size].placements||[])
+    .map(p=>p.index));
+  const backgrounds=new Set((state.outputs[state.size].placements||[])
+    .filter(p=>p.visible===false).map(p=>p.index));
+  [...state.layers].sort((a,b)=>(b.z??b.index)-(a.z??a.index)).forEach(ly=>{
+    const d=document.createElement("div");d.className="layer";
+    d.dataset.idx=ly.index;
+    if(!placedIdx.has(ly.index))d.classList.add("dropped");
+    d.innerHTML=`<img src="${ly.url}" alt="" loading="lazy">
+      <span class="nm">${esc(ly.name||("layer "+ly.index))}</span>
+      ${ly.locked?'<span class="lock" title="locked">&#128274;</span>':""}
+      <span class="role">${backgrounds.has(ly.index)?"background":esc(ly.role||"?")}</span><span class="ovdot"></span>`;
+    d.onclick=()=>{if(backgrounds.has(ly.index)){toast("Used in the automatic background fill");return}select(ly.index)};
+    list.appendChild(d)});
+  syncLayerList();
+}
+function syncLayerList(){
+  const ov=state.overrides[state.size]||{};
+  document.querySelectorAll(".layer").forEach(d=>{
+    const i=+d.dataset.idx;
+    d.classList.toggle("sel",state.sel===i);
+    d.classList.toggle("hasov",ov[i]!==undefined)});
+}
+function esc(s){return String(s).replace(/[&<>"]/g,
+  c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+/* ---------------- stage ---------------- */
+function curBoxes(){
+  // effective bbox per placed element = override || engine placement
+  const out={},ov=state.overrides[state.size]||{};
+  (state.outputs[state.size].placements||[]).forEach(p=>{
+    if(p.visible===false)return;
+    out[p.index]={bbox:(ov[p.index]||p.bbox).slice(),
+      engine:p.bbox.slice(),group:p.group}});
+  return out;
+}
+function renderStage(){
+  const[tw,th]=state.size.split("x").map(Number);
+  const art=$("#artboard");
+  art.style.width=tw+"px";art.style.height=th+"px";
+  art.classList.toggle("engine",state.engine);
+  $("#stagewrap").classList.toggle("engine",state.engine);
+  // fit
+  const wrap=$("#stagewrap"),pad=56;
+  const sc=Math.min((wrap.clientWidth-pad)/tw,(wrap.clientHeight-pad)/th,1);
+  state.scale=sc;
+  const st=$("#stage");
+  st.style.transform=`scale(${sc})`;
+  st.style.left=Math.max(pad/2,(wrap.clientWidth-tw*sc)/2)+"px";
+  st.style.top=Math.max(pad/2,(wrap.clientHeight-th*sc)/2)+"px";
+  // background: the ENGINE's own canvas for this size (bg layer /
+  // backdrop synth / bg color), rendered server-side — exact export parity
+  art.querySelectorAll(".el,.guide,.bglayer").forEach(n=>n.remove());
+  if(state.bgColor)art.style.background="rgb("+state.bgColor.join(",")+")";
+  const bgu=(state.bgUrls||{})[state.size];
+  if(bgu){const bg=document.createElement("div");bg.className="bglayer";
+    bg.innerHTML=`<img src="${bgu}" alt="" draggable="false">`;
+    art.appendChild(bg)}
+  const boxes=curBoxes();
+  const zOf=i=>{const l=layerById(i);return l&&l.z!=null?l.z:i};
+  Object.keys(boxes).map(Number).sort((a,b)=>zOf(a)-zOf(b))
+    .forEach(i=>{
+      const ly=layerById(i);if(!ly||!ly.has_image)return;
+      const el=document.createElement("div");el.className="el";
+      el.dataset.idx=i;if(ly.locked)el.classList.add("locked");
+      el.innerHTML=`<img src="${ly.url}" alt="${esc(ly.name||"")}" draggable="false">`;
+      setBox(el,boxes[i].bbox);
+      el.addEventListener("pointerdown",ev=>startDrag(ev,i,"move"));
+      art.appendChild(el)});
+  syncSelection();buildLayerList();
+}
+function setBox(el,b){el.style.left=b[0]+"px";el.style.top=b[1]+"px";
+  el.style.width=Math.max(1,b[2])+"px";el.style.height=Math.max(1,b[3])+"px"}
+function elOf(i){return $("#artboard").querySelector(`.el[data-idx="${i}"]`)}
+
+function select(i){state.sel=i;syncSelection();updateInspector();syncLayerList()}
+function syncSelection(){
+  document.querySelectorAll("#artboard .el").forEach(el=>{
+    const s=+el.dataset.idx===state.sel;
+    el.classList.toggle("sel",s);
+    el.querySelectorAll(".handle").forEach(h=>h.remove());
+    if(s&&!el.classList.contains("locked")){
+      ["nw","ne","sw","se"].forEach(c=>{const h=document.createElement("div");
+        h.className="handle "+c;
+        h.addEventListener("pointerdown",ev=>startDrag(ev,+el.dataset.idx,c));
+        el.appendChild(h)})}});
+}
+$("#stagewrap").addEventListener("pointerdown",e=>{
+  if(e.target.id==="stagewrap"||e.target.id==="artboard"||e.target.id==="stage"){
+    state.sel=null;syncSelection();updateInspector();syncLayerList()}});
+window.addEventListener("resize",()=>{if(state.sid)renderStage()});
+
+/* ---------------- drag / scale with snapping ---------------- */
+let drag=null;
+function startDrag(ev,idx,mode){
+  if(state.engine)return;
+  const ly=layerById(idx);if(ly&&ly.locked&&mode==="move")return;
+  ev.preventDefault();ev.stopPropagation();
+  select(idx);
+  const boxes=curBoxes();
+  const members=(mode==="move")
+    ?Object.keys(boxes).map(Number).filter(j=>
+        boxes[j].group!=null&&boxes[j].group===boxes[idx].group
+        &&!(layerById(j)||{}).locked)
+    :[idx];
+  if(mode==="move"&&!members.includes(idx))members.push(idx);
+  drag={idx,mode,members,x0:ev.clientX,y0:ev.clientY,
+    start:Object.fromEntries(members.map(j=>[j,boxes[j].bbox.slice()])),
+    engine:Object.fromEntries(members.map(j=>[j,boxes[j].engine.slice()])),
+    moved:false};
+  elOf(idx)?.classList.add("dragging");
+  window.addEventListener("pointermove",onDrag);
+  window.addEventListener("pointerup",endDrag,{once:true});
+}
+function onDrag(ev){
+  if(!drag)return;
+  const[tw,th]=state.size.split("x").map(Number);
+  let dx=(ev.clientX-drag.x0)/state.scale,
+      dy=(ev.clientY-drag.y0)/state.scale;
+  if(Math.abs(dx)+Math.abs(dy)>0.5)drag.moved=true;
+  clearGuides();
+  if(drag.mode==="move"){
+    // snap the grabbed element's edges/center to canvas edges/center
+    const s=drag.start[drag.idx],snap=6/state.scale,g=[];
+    let nx=s[0]+dx,ny=s[1]+dy;
+    const cands=[[nx,0],[nx+s[2],tw],[nx+s[2]/2,tw/2]];
+    for(const[v,t]of cands)if(Math.abs(v-t)<snap){nx+=t-v;g.push(["v",t]);break}
+    const candsY=[[ny,0],[ny+s[3],th],[ny+s[3]/2,th/2]];
+    for(const[v,t]of candsY)if(Math.abs(v-t)<snap){ny+=t-v;g.push(["h",t]);break}
+    dx=nx-s[0];dy=ny-s[1];
+    drawGuides(g);
+    drag.members.forEach(j=>{
+      const b=drag.start[j];setBox(elOf(j),[b[0]+dx,b[1]+dy,b[2],b[3]])});
+  }else{
+    const b=drag.start[drag.idx].slice();
+    const uniform=state.isSvg||!ev.shiftKey;
+    let[x,y,w,h]=b;
+    const east=drag.mode.includes("e"),south=drag.mode.includes("s");
+    let nw=east?w+dx:w-dx, nh=south?h+dy:h-dy;
+    if(uniform){const k=Math.max(nw/w,nh/h);nw=w*k;nh=h*k}
+    if(uniform){const k=Math.max(nw/w,nh/h,8/w,8/h);nw=w*k;nh=h*k}
+    else{nw=Math.max(8,nw);nh=Math.max(8,nh)}
+    if(!east)x+=w-nw;
+    if(!south)y+=h-nh;
+    setBox(elOf(drag.idx),[x,y,nw,nh]);
+  }
+  if(state.sel===drag.idx)fillInspector(readBox(elOf(drag.idx)));
+}
+function readBox(el){return[parseFloat(el.style.left),parseFloat(el.style.top),
+  parseFloat(el.style.width),parseFloat(el.style.height)]}
+function endDrag(){
+  window.removeEventListener("pointermove",onDrag);
+  clearGuides();
+  if(!drag)return;
+  elOf(drag.idx)?.classList.remove("dragging");
+  if(drag.moved){
+    const entries=[];
+    drag.members.forEach(j=>{
+      const nb=readBox(elOf(j)).map(v=>Math.round(v*10)/10);
+      state.overrides[state.size][j]=nb;
+      const ly=layerById(j)||{};
+      entries.push({size:state.size,index:j,name:ly.name,role:ly.role,
+        group_id:ly.group_id,engine_bbox:drag.engine[j],user_bbox:nb})});
+    logOverrides(entries);
+    markDirty();syncTabs();syncLayerList();updateInspector();
+  }
+  drag=null;
+}
+function clearGuides(){document.querySelectorAll(".guide").forEach(g=>g.remove())}
+function drawGuides(list){const art=$("#artboard");
+  list.forEach(([o,pos])=>{const d=document.createElement("div");
+    d.className="guide "+o;
+    if(o==="v")d.style.left=pos+"px";else d.style.top=pos+"px";
+    art.appendChild(d)})}
+
+/* arrow-key nudge */
+window.addEventListener("keydown",e=>{
+  if(state.sel==null||state.engine)return;
+  if(/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))return;
+  const step=e.shiftKey?10:1;
+  const map={ArrowLeft:[-step,0],ArrowRight:[step,0],
+             ArrowUp:[0,-step],ArrowDown:[0,step]};
+  if(e.key==="Escape"){state.sel=null;syncSelection();updateInspector();
+    syncLayerList();return}
+  if(!map[e.key])return;
+  e.preventDefault();
+  const[dx,dy]=map[e.key],boxes=curBoxes(),b=boxes[state.sel];
+  if(!b)return;
+  const members=Object.keys(boxes).map(Number).filter(j=>
+    boxes[j].group!=null&&boxes[j].group===b.group&&!(layerById(j)||{}).locked);
+  if(!members.includes(state.sel))members.push(state.sel);
+  const entries=[];
+  members.forEach(j=>{
+    const nb=boxes[j].bbox.map((v,k)=>k===0?v+dx:k===1?v+dy:v);
+    state.overrides[state.size][j]=nb;setBox(elOf(j),nb);
+    const ly=layerById(j)||{};
+    entries.push({size:state.size,index:j,name:ly.name,role:ly.role,
+      group_id:ly.group_id,engine_bbox:boxes[j].engine,user_bbox:nb})});
+  logOverrides(entries);markDirty();syncTabs();syncLayerList();updateInspector();
+});
+
+/* ---------------- inspector ---------------- */
+function updateInspector(){
+  const has=state.sel!=null&&curBoxes()[state.sel];
+  $("#ins-empty").style.display=has?"none":"block";
+  $("#ins-body").style.display=has?"block":"none";
+  $("#ins-ovcount").textContent=
+    Object.keys(state.overrides[state.size]||{}).length;
+  if(!has)return;
+  const ly=layerById(state.sel)||{};
+  $("#download-layer").style.display=ly.svg_url?"block":"none";
+  if(ly.svg_url)$("#download-layer").href=ly.svg_url;
+  $("#ins-name").textContent=(ly.name||"layer "+state.sel).slice(0,22);
+  $("#ins-role").textContent=ly.role||"—";
+  $("#ins-group").textContent=curBoxes()[state.sel].group??"—";
+  fillInspector(curBoxes()[state.sel].bbox);
+}
+function fillInspector(b){["x","y","w","h"].forEach((k,i)=>{
+  $("#in-"+k).value=Math.round(b[i])})}
+["x","y","w","h"].forEach((k,i)=>{
+  $("#in-"+k).addEventListener("change",()=>{
+    if(state.sel==null)return;
+    const boxes=curBoxes(),b=boxes[state.sel];if(!b)return;
+    const nb=b.bbox.slice();nb[i]=parseFloat($("#in-"+k).value)||0;
+    if(i>=2&&nb[i]<=0){fillInspector(b.bbox);return}
+    if(state.isSvg&&i===2)nb[3]=nb[2]*b.bbox[3]/b.bbox[2];
+    if(state.isSvg&&i===3)nb[2]=nb[3]*b.bbox[2]/b.bbox[3];
+    fillInspector(nb);
+    state.overrides[state.size][state.sel]=nb;setBox(elOf(state.sel),nb);
+    logOverrides([{size:state.size,index:state.sel,
+      name:(layerById(state.sel)||{}).name,role:(layerById(state.sel)||{}).role,
+      group_id:(layerById(state.sel)||{}).group_id,
+      engine_bbox:b.engine,user_bbox:nb}]);
+    markDirty();syncTabs();syncLayerList()})});
+$("#btn-resetlayer").addEventListener("click",()=>{
+  if(state.sel==null)return;
+  delete state.overrides[state.size][state.sel];
+  renderStage();updateInspector();syncTabs();markDirty()});
+$("#btn-resetsize").addEventListener("click",()=>{
+  state.overrides[state.size]={};
+  renderStage();updateInspector();syncTabs();markDirty()});
+
+/* ---------------- engine preview round-trip ---------------- */
+function markDirty(){state.engineStale[state.size]=true;
+  if(state.engine)debounceEngine()}
+let engTimer=null;
+function debounceEngine(){clearTimeout(engTimer);
+  engTimer=setTimeout(refreshEngine,700)}
+async function refreshEngine(){
+  if(!state.engine)return;
+  const size=state.size;
+  try{
+    const r=await fetch("/editor/render",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({sid:state.sid,size,
+        overrides:state.overrides[size]})});
+    if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
+    const blob=await r.blob();
+    if(size!==state.size)return;           // user switched tabs mid-flight
+    const url=URL.createObjectURL(blob);
+    const img=$("#engineimg");
+    const old=img.src;img.src=url;
+    if(old&&old.startsWith("blob:"))URL.revokeObjectURL(old);
+    state.engineStale[size]=false;
+  }catch(e){toast("Render failed: "+e.message,4500)}
+}
+$("#btn-engine").addEventListener("click",()=>{
+  state.engine=!state.engine;
+  $("#btn-engine").classList.toggle("toggled",state.engine);
+  $("#btn-engine").textContent=state.engine?"Engine preview ✓":"Engine preview";
+  renderStage();
+  if(state.engine&&state.engineStale[state.size])refreshEngine()});
+
+/* ---------------- export ---------------- */
+$("#btn-size").addEventListener("click",async()=>{
+  try{
+    const r=await fetch("/editor/size",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({sid:state.sid,width:Number($("#custom-w").value),height:Number($("#custom-h").value)})});
+    const data=await r.json();if(!r.ok)throw new Error(data.detail||r.statusText);
+    if(!state.sizes.includes(data.size))state.sizes.push(data.size);
+    state.outputs[data.size]=data.output;state.bgUrls[data.size]=data.bg_url;
+    state.overrides[data.size]=state.overrides[data.size]||{};state.engineStale[data.size]=true;
+    state.size=data.size;state.sel=null;buildTabs();renderStage();updateInspector();
+    if(state.engine)refreshEngine();
+  }catch(e){toast("Size failed: "+e.message,5000)}
+});
+$("#btn-export").addEventListener("click",async()=>{
+  const btn=$("#btn-export");btn.disabled=true;btn.textContent="Rendering…";
+  try{
+    const r=await fetch("/editor/export",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({sid:state.sid,overrides:state.overrides})});
+    if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
+    const blob=await r.blob();
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=(state.file.replace(/\.[^.]+$/,"")||"renders")+"_sizes.zip";
+    a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    toast("Exported "+state.sizes.length+" sizes"+(state.isSvg?" + SVG layers":"")+" ✓");
+  }catch(e){toast("Export failed: "+e.message,5000)}
+  btn.disabled=false;btn.textContent="Export all sizes";
+});
+
+/* ---------------- override logging (fire-and-forget) ---------------- */
+function logOverrides(entries){}
+</script>
+</body>
+</html>
